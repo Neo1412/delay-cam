@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
 <style>
-  /* Layout: full-bleed delayed video, a floating control bar on top, status + live preview along the bottom. */
+  /* Layout: full-bleed delayed video, a floating control bar on top, status or review controls + live preview along the bottom. */
   :root {
     --bg: #0e1013;
     --panel: rgba(20, 23, 28, 0.82);
@@ -80,7 +80,7 @@
   .tool svg { width: 20px; height: 20px; }
   .tool.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
-  /* ---------- bottom status + live preview ---------- */
+  /* ---------- bottom status / review + live preview ---------- */
   .bottom {
     position: fixed; left: 0; right: 0; bottom: 0;
     padding: 12px var(--gutter) calc(env(safe-area-inset-bottom, 0px) + 14px);
@@ -95,11 +95,10 @@
     font-variant-numeric: tabular-nums;
   }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
-  .status.paused .dot { background: var(--muted); }
   .status small { font: 500 13px/1.2 var(--body); text-transform: none; letter-spacing: 0; color: var(--muted); }
 
   .preview {
-    position: relative; width: min(26vw, 240px); aspect-ratio: 16 / 9; max-width: 100%;
+    position: relative; flex: none; width: min(24vw, 220px); aspect-ratio: 16 / 9; max-width: 100%;
     border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #000;
   }
   .preview video { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -111,6 +110,35 @@
   .preview .tag i { width: 8px; height: 8px; border-radius: 50%; background: var(--live); }
   .preview.tucked { width: 1px; height: 1px; opacity: 0.01; border: 0; position: fixed; }
   body.mirror #live { transform: scaleX(-1); }
+
+  /* review panel */
+  .review {
+    flex: 1; min-width: 0; max-width: 820px; padding: 14px 16px 12px; border-radius: 16px;
+    background: var(--panel-solid); border: 1px solid var(--line); display: grid; gap: 10px;
+  }
+  .review-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .review-head b { font: 700 22px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+  .review-head span { font: 600 20px/1 var(--display); font-variant-numeric: tabular-nums; }
+  .scrub { position: relative; height: 44px; }
+  .scrub input { position: absolute; inset: 0; width: 100%; height: 44px; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; }
+  .scrub input::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: var(--line); }
+  .scrub input::-moz-range-track { height: 8px; border-radius: 4px; background: var(--line); }
+  .scrub input::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; margin-top: -11px; border-radius: 50%; background: var(--accent); border: 3px solid var(--panel-solid); }
+  .scrub input::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); border: 3px solid var(--panel-solid); }
+  .marker { position: absolute; top: 6px; bottom: 6px; width: 2px; margin-left: -1px; background: var(--fg); opacity: .7; pointer-events: none; }
+  .marker span { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; color: var(--muted); }
+  .scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: -6px; }
+  .transport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .tbtn {
+    height: 48px; min-width: 52px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel); font: 600 18px/1 var(--display); display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .tbtn svg { width: 22px; height: 22px; }
+  .tbtn:active { background: var(--line); }
+  .tbtn.play { width: 60px; height: 60px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .tbtn.live { margin-left: auto; padding: 0 18px; border-color: var(--accent); color: var(--accent); text-transform: uppercase; letter-spacing: .06em; }
+  .tbtn.live i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
 
   /* ---------- center overlays ---------- */
   .center {
@@ -141,7 +169,7 @@
   }
   .sheet h2 { margin: 0; font: 700 22px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; }
   .field { display: grid; gap: 6px; }
-  .field label, .field .lbl { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .field label { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
   .field select {
     height: 46px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); padding: 0 12px; width: 100%;
   }
@@ -155,6 +183,8 @@
     .round { width: 48px; height: 48px; }
     .tools { margin-left: 0; }
     .tool span { display: none; }
+    body.reviewing .preview { display: none; }
+    .tbtn.live { margin-left: 0; }
   }
   @media (prefers-reduced-motion: reduce) { .bar, .bottom { transition: none; } }
 </style>
@@ -190,9 +220,9 @@
   </div>
   <div class="presets" id="presets"></div>
   <div class="tools">
-    <button class="tool" id="pauseBtn" aria-pressed="false">
-      <svg viewBox="0 0 24 24" fill="currentColor" id="pauseIcon"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-      <span id="pauseLabel">Freeze</span>
+    <button class="tool" id="reviewBtn" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+      <span id="reviewLabel">Freeze &amp; review</span>
     </button>
     <button class="tool" id="fsBtn" aria-label="Full screen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
@@ -206,6 +236,29 @@
 
 <div class="bottom" id="bottom" hidden>
   <div class="status" id="status"><i class="dot"></i><span id="statusText">Replay · 10s ago</span></div>
+
+  <section class="review" id="review" hidden aria-label="Review controls">
+    <div class="review-head"><b>Review</b><span id="revPos">0.0s ago</span></div>
+    <div class="scrub">
+      <input type="range" id="scrub" min="0" max="1000" step="1" value="1000" aria-label="Scrub through recent video">
+      <div class="marker" id="marker"><span>Live delay</span></div>
+    </div>
+    <div class="scale"><span id="scaleLeft">−30s</span><span>now</span></div>
+    <div class="transport">
+      <button class="tbtn" id="back5" aria-label="Back 5 seconds">−5s</button>
+      <button class="tbtn" id="stepBack" aria-label="Previous frame">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="2.5" height="14" rx="1"/><path d="M19 5.5v13a1 1 0 0 1-1.5.86l-9-6.5a1 1 0 0 1 0-1.72l9-6.5A1 1 0 0 1 19 5.5z"/></svg>
+      </button>
+      <button class="tbtn play" id="playBtn" aria-label="Play"></button>
+      <button class="tbtn" id="stepFwd" aria-label="Next frame">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="16.5" y="5" width="2.5" height="14" rx="1"/><path d="M5 5.5v13a1 1 0 0 0 1.5.86l9-6.5a1 1 0 0 0 0-1.72l-9-6.5A1 1 0 0 0 5 5.5z"/></svg>
+      </button>
+      <button class="tbtn" id="fwd5" aria-label="Forward 5 seconds">+5s</button>
+      <button class="tbtn" id="speedBtn" aria-label="Playback speed">1×</button>
+      <button class="tbtn live" id="liveBtn"><i></i>Back to live delay</button>
+    </div>
+  </section>
+
   <div class="preview" id="previewBox">
     <video id="live" playsinline muted autoplay></video>
     <span class="tag"><i></i>LIVE</span>
@@ -226,9 +279,17 @@
       <option value="sharp">Sharp (1080p, 30 fps)</option>
     </select>
   </div>
+  <div class="field">
+    <label for="rewindSel">Rewind window</label>
+    <select id="rewindSel">
+      <option value="15">15 seconds before the replay</option>
+      <option value="30">30 seconds before the replay</option>
+      <option value="60">60 seconds before the replay</option>
+    </select>
+  </div>
   <div class="toggle"><label for="mirrorChk">Mirror image</label><input type="checkbox" id="mirrorChk"></div>
   <div class="toggle"><label for="previewChk">Show live preview</label><input type="checkbox" id="previewChk"></div>
-  <p class="hint">Tap the video to hide or show the controls. Changing camera or quality restarts the delay.</p>
+  <p class="hint">Tap the video to hide or show the controls. Changing camera or quality restarts the delay. Video is only held in memory and is never saved.</p>
   <div class="mem" id="memText">Buffer: 0 MB</div>
 </div>
 
@@ -244,11 +305,12 @@
     sharp: { h: 1080, fps: 30, q: 0.75 },
   };
   const PRESETS = [5, 10, 15, 20, 30, 45, 60];
+  const SPEEDS = [1, 0.5, 0.25];
   const MIN_DELAY = 1, MAX_DELAY = 120;
   const MEM_CAP = 450e6; // bytes of JPEG frames kept in memory
 
   const prefs = Object.assign(
-    { delay: 10, quality: 'std', mirror: false, preview: true, deviceId: '' },
+    { delay: 10, quality: 'std', rewind: 30, mirror: false, preview: true, deviceId: '' },
     (() => { try { return JSON.parse(localStorage.getItem('delaycam') || '{}'); } catch { return {}; } })()
   );
   const save = () => { try { localStorage.setItem('delaycam', JSON.stringify(prefs)); } catch {} };
@@ -256,9 +318,10 @@
   let stream = null, running = false;
   let frames = [], bytes = 0, pending = 0, lastGrab = 0, memLimited = false;
   let shown = null, bitmap = null, want = null, decoding = false;
-  let paused = false, pausedAt = 0, wakeLock = null;
+  let review = false, revPos = 0, revPlaying = false, revSpeed = 0, scrubbing = false;
+  let lastRender = performance.now(), wakeLock = null;
 
-  /* ---------------- capture: JPEG frames into a time-stamped buffer ---------------- */
+  /* ---------------- capture: JPEG frames into a time-stamped buffer (memory only) ---------------- */
   function scheduleGrab() {
     if (!running) return;
     if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(tick);
@@ -287,21 +350,48 @@
     }, 'image/jpeg', q.q);
   }
 
-  /* ---------------- playback: show the frame from `delay` seconds ago ---------------- */
+  // index of the last frame captured at or before time t, or -1
+  function frameAt(t) {
+    let lo = 0, hi = frames.length - 1, r = -1;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (frames[m].t <= t) { r = m; lo = m + 1; } else hi = m - 1; }
+    return r;
+  }
+
+  /* ---------------- playback ---------------- */
   function render() {
     requestAnimationFrame(render);
-    if (!running) return;
     const now = performance.now();
-    const target = (paused ? pausedAt : now) - prefs.delay * 1000;
+    const dt = now - lastRender;
+    lastRender = now;
+    if (!running) return;
 
     let i = -1;
-    for (let k = 0; k < frames.length && frames[k].t <= target; k++) i = k;
-    if (i > 0 && !paused) {
-      for (let k = 0; k < i; k++) bytes -= frames[k].b.size;
-      frames.splice(0, i); i = 0;
+    if (review) {
+      if (frames.length) {
+        const lo = frames[0].t, hi = frames[frames.length - 1].t;
+        if (revPlaying && !scrubbing) {
+          revPos += dt * SPEEDS[revSpeed];
+          if (revPos >= hi) { revPos = hi; setPlaying(false); }
+        }
+        revPos = Math.min(hi, Math.max(lo, revPos));
+        i = frameAt(revPos);
+      }
+      updateReview(now);
+    } else {
+      const target = now - prefs.delay * 1000;
+      i = frameAt(target);
+      // keep a rewind window of history behind the replay point; drop anything older
+      const cutoff = target - prefs.rewind * 1000;
+      let drop = 0;
+      while (drop < frames.length - 1 && frames[drop].t < cutoff) drop++;
+      if (drop) {
+        for (let k = 0; k < drop; k++) bytes -= frames[k].b.size;
+        frames.splice(0, drop);
+        i -= drop;
+      }
     }
     if (i >= 0 && frames[i] !== shown) showFrame(frames[i]);
-    updateStatus(now, target, i >= 0);
+    updateStatus(now, i >= 0);
   }
 
   async function showFrame(f) {
@@ -338,33 +428,110 @@
 
   /* ---------------- status + overlays ---------------- */
   let lastStatus = '';
-  function updateStatus(now, target, haveFrame) {
+  function updateStatus(now, haveFrame) {
+    const target = now - prefs.delay * 1000;
     const waiting = frames.length ? Math.max(0, (frames[0].t - target) / 1000) : prefs.delay;
     const filling = !haveFrame;
 
-    $('#countdown').hidden = !(filling && !shown);
+    $('#countdown').hidden = !(filling && !shown && !review);
     if (filling && !shown) {
       $('#countNum').textContent = Math.ceil(waiting);
       $('#countText').textContent = frames.length ? 'Recording. Replay starts in…' : 'Waiting for the camera…';
       $('#meterFill').style.width = `${Math.min(100, (1 - waiting / prefs.delay) * 100)}%`;
     }
 
-    let text, cls = '';
-    if (paused) { text = 'Frozen'; cls = 'paused'; }
-    else if (filling && shown) text = `Adding delay · ${Math.ceil(waiting)}s`;
+    let text;
+    if (filling && shown) text = `Adding delay · ${Math.ceil(waiting)}s`;
     else if (filling) text = 'Recording';
     else text = `Replay · ${prefs.delay}s ago`;
-    if (memLimited && !paused) text += ' <small>(memory full: try lower quality)</small>';
-    const key = text + cls;
-    if (key !== lastStatus) {
-      lastStatus = key;
-      $('#statusText').innerHTML = text;
-      $('#status').className = 'status ' + cls;
-    }
+    if (memLimited) text += ' <small>(memory full: try lower quality)</small>';
+    if (text !== lastStatus) { lastStatus = text; $('#statusText').innerHTML = text; }
+
     if (!$('#sheet').hidden) {
       $('#memText').textContent = `Buffer: ${(bytes / 1e6).toFixed(0)} MB · ${frames.length} frames`;
     }
   }
+
+  /* ---------------- review mode ---------------- */
+  const PLAY_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>';
+  const PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+
+  function setPlaying(p) {
+    revPlaying = p;
+    $('#playBtn').innerHTML = p ? PAUSE_ICON : PLAY_ICON;
+    $('#playBtn').setAttribute('aria-label', p ? 'Pause' : 'Play');
+  }
+
+  function enterReview() {
+    if (review || !running) return;
+    review = true;
+    revPos = shown ? shown.t : performance.now() - prefs.delay * 1000;
+    setPlaying(false);
+    document.body.classList.add('reviewing');
+    document.body.classList.remove('chrome-off');
+    $('#review').hidden = false;
+    $('#status').hidden = true;
+    $('#reviewBtn').classList.add('on');
+    $('#reviewBtn').setAttribute('aria-pressed', 'true');
+    $('#reviewLabel').textContent = 'Back to live';
+  }
+
+  function exitReview() {
+    if (!review) return;
+    review = false;
+    setPlaying(false);
+    document.body.classList.remove('reviewing');
+    $('#review').hidden = true;
+    $('#status').hidden = false;
+    $('#reviewBtn').classList.remove('on');
+    $('#reviewBtn').setAttribute('aria-pressed', 'false');
+    $('#reviewLabel').textContent = 'Freeze & review';
+  }
+
+  function updateReview(now) {
+    if (!frames.length) return;
+    const lo = frames[0].t, hi = frames[frames.length - 1].t, span = Math.max(1, hi - lo);
+    if (!scrubbing) $('#scrub').value = Math.round(((revPos - lo) / span) * 1000);
+    const live = now - prefs.delay * 1000;
+    const m = $('#marker');
+    m.hidden = live < lo || live > hi;
+    m.style.left = `${((live - lo) / span) * 100}%`;
+    $('#revPos').textContent = `${((now - revPos) / 1000).toFixed(1)}s ago${SPEEDS[revSpeed] !== 1 ? ' · ' + speedLabel() : ''}`;
+    $('#scaleLeft').textContent = `−${Math.round((now - lo) / 1000)}s`;
+  }
+
+  function stepFrame(dir) {
+    if (!frames.length) return;
+    setPlaying(false);
+    const i = Math.max(0, Math.min(frames.length - 1, frameAt(revPos) + dir));
+    revPos = frames[i].t;
+  }
+  const speedLabel = () => ['1×', '½×', '¼×'][revSpeed];
+
+  $('#reviewBtn').addEventListener('click', () => (review ? exitReview() : enterReview()));
+  $('#liveBtn').addEventListener('click', exitReview);
+  $('#playBtn').addEventListener('click', () => {
+    if (frames.length && revPos >= frames[frames.length - 1].t) revPos = frames[0].t;
+    setPlaying(!revPlaying);
+  });
+  $('#stepBack').addEventListener('click', () => stepFrame(-1));
+  $('#stepFwd').addEventListener('click', () => stepFrame(1));
+  $('#back5').addEventListener('click', () => { revPos -= 5000; });
+  $('#fwd5').addEventListener('click', () => { revPos += 5000; });
+  $('#speedBtn').addEventListener('click', () => {
+    revSpeed = (revSpeed + 1) % SPEEDS.length;
+    $('#speedBtn').textContent = speedLabel();
+  });
+  const scrub = $('#scrub');
+  scrub.addEventListener('input', () => {
+    if (!frames.length) return;
+    scrubbing = true;
+    const lo = frames[0].t, hi = frames[frames.length - 1].t;
+    revPos = lo + (scrub.value / 1000) * (hi - lo);
+  });
+  scrub.addEventListener('change', () => { scrubbing = false; });
+  ['pointerup', 'touchend', 'pointercancel'].forEach((e) => scrub.addEventListener(e, () => { scrubbing = false; }));
+  setPlaying(false);
 
   /* ---------------- delay controls ---------------- */
   function setDelay(v) {
@@ -380,27 +547,19 @@
     b.addEventListener('click', () => setDelay(v));
     $('#presets').appendChild(b);
   });
-  const step = () => (prefs.delay < 10 ? 1 : 5);
-  $('#minus').addEventListener('click', () => setDelay(prefs.delay <= 10 ? prefs.delay - 1 : prefs.delay - 5));
-  $('#plus').addEventListener('click', () => setDelay(prefs.delay + step()));
-
-  function togglePause() {
-    paused = !paused;
-    pausedAt = performance.now();
-    $('#pauseBtn').classList.toggle('on', paused);
-    $('#pauseBtn').setAttribute('aria-pressed', String(paused));
-    $('#pauseLabel').textContent = paused ? 'Resume' : 'Freeze';
-    $('#pauseIcon').innerHTML = paused
-      ? '<path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/>'
-      : '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
-  }
-  $('#pauseBtn').addEventListener('click', togglePause);
+  const longer = () => setDelay(prefs.delay + (prefs.delay < 10 ? 1 : 5));
+  const shorter = () => setDelay(prefs.delay <= 10 ? prefs.delay - 1 : prefs.delay - 5);
+  $('#minus').addEventListener('click', shorter);
+  $('#plus').addEventListener('click', longer);
 
   document.addEventListener('keydown', (e) => {
-    if (!running || e.target.tagName === 'SELECT') return;
-    if (e.key === ' ') { e.preventDefault(); togglePause(); }
-    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') setDelay(prefs.delay + step());
-    if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') setDelay(prefs.delay <= 10 ? prefs.delay - 1 : prefs.delay - 5);
+    if (!running || e.target.tagName === 'SELECT' || e.target.type === 'range') return;
+    if (e.key === ' ') { e.preventDefault(); review ? setPlaying(!revPlaying) : enterReview(); }
+    else if (e.key === 'Escape' || e.key === 'l') exitReview();
+    else if (review && e.key === 'ArrowLeft') stepFrame(-1);
+    else if (review && e.key === 'ArrowRight') stepFrame(1);
+    else if (!review && e.key === 'ArrowUp') longer();
+    else if (!review && e.key === 'ArrowDown') shorter();
   });
 
   $('#stage').addEventListener('click', () => {
@@ -418,6 +577,8 @@
 
   $('#qualSel').value = prefs.quality;
   $('#qualSel').addEventListener('change', (e) => { prefs.quality = e.target.value; save(); startCamera(); });
+  $('#rewindSel').value = String(prefs.rewind);
+  $('#rewindSel').addEventListener('change', (e) => { prefs.rewind = +e.target.value; save(); });
   $('#camSel').addEventListener('change', (e) => { prefs.deviceId = e.target.value; save(); startCamera(); });
   $('#mirrorChk').checked = prefs.mirror;
   $('#mirrorChk').addEventListener('change', (e) => { prefs.mirror = e.target.checked; save(); applyLook(); draw(); });
@@ -465,6 +626,7 @@
     frames = []; bytes = 0; pending = 0; shown = null; want = null; memLimited = false;
     if (bitmap && bitmap.close) bitmap.close();
     bitmap = null; draw();
+    exitReview();
   }
 
   async function startCamera() {
