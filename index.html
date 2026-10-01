@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Delay Cam">
+<meta name="theme-color" content="#0e1013">
+<title>Delay Cam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+  /* Layout: full-bleed delayed video, a floating control bar on top, status + live preview along the bottom. */
+  :root {
+    --bg: #0e1013;
+    --panel: rgba(20, 23, 28, 0.82);
+    --panel-solid: #171a20;
+    --line: rgba(255, 255, 255, 0.12);
+    --fg: #f2f3f5;
+    --muted: #9aa1ad;
+    --accent: #ffb020;      /* stopwatch amber */
+    --accent-ink: #1a1203;
+    --live: #ff4d4d;
+    --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+    --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --gutter: max(16px, env(safe-area-inset-left, 0px));
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg); font: 16px/1.4 var(--body);
+    overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  }
+  button, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  #stage { position: fixed; inset: 0; background: #000; }
+  #view { width: 100%; height: 100%; display: block; }
+
+  /* ---------- top control bar ---------- */
+  .bar {
+    position: fixed; left: 0; right: 0; top: 0;
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) var(--gutter) 12px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+    background: linear-gradient(to bottom, rgba(0,0,0,.75), rgba(0,0,0,0));
+    transition: opacity .2s, transform .2s;
+  }
+  body.chrome-off .bar, body.chrome-off .bottom { opacity: 0; pointer-events: none; }
+  body.chrome-off .bar { transform: translateY(-8px); }
+
+  .delay { display: flex; align-items: center; gap: 10px; }
+  .round {
+    width: 56px; height: 56px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--panel); font: 600 30px/1 var(--display); display: grid; place-items: center;
+  }
+  .round:active { background: var(--accent); color: var(--accent-ink); }
+  .readout { min-width: 104px; text-align: center; line-height: 1; }
+  .readout b { font: 700 56px/1 var(--display); font-variant-numeric: tabular-nums; }
+  .readout span { display: block; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    min-width: 48px; height: 40px; padding: 0 12px; border-radius: 20px;
+    border: 1px solid var(--line); background: var(--panel);
+    font: 600 18px/1 var(--display); font-variant-numeric: tabular-nums;
+  }
+  .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  .tools { margin-left: auto; display: flex; gap: 8px; }
+  .tool {
+    height: 48px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel); font-weight: 600; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .tool svg { width: 20px; height: 20px; }
+  .tool.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  /* ---------- bottom status + live preview ---------- */
+  .bottom {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    padding: 12px var(--gutter) calc(env(safe-area-inset-bottom, 0px) + 14px);
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+    pointer-events: none; transition: opacity .2s;
+  }
+  .bottom > * { pointer-events: auto; }
+  .status {
+    display: inline-flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    font: 600 20px/1 var(--display); letter-spacing: .04em; text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+  .status.paused .dot { background: var(--muted); }
+  .status small { font: 500 13px/1.2 var(--body); text-transform: none; letter-spacing: 0; color: var(--muted); }
+
+  .preview {
+    position: relative; width: min(26vw, 240px); aspect-ratio: 16 / 9; max-width: 100%;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #000;
+  }
+  .preview video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .preview .tag {
+    position: absolute; left: 8px; top: 8px; display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px; border-radius: 6px; background: rgba(0,0,0,.6);
+    font: 700 13px/1 var(--display); letter-spacing: .1em;
+  }
+  .preview .tag i { width: 8px; height: 8px; border-radius: 50%; background: var(--live); }
+  .preview.tucked { width: 1px; height: 1px; opacity: 0.01; border: 0; position: fixed; }
+  body.mirror #live { transform: scaleX(-1); }
+
+  /* ---------- center overlays ---------- */
+  .center {
+    position: fixed; inset: 0; display: grid; place-items: center; padding: 24px var(--gutter);
+    text-align: center; pointer-events: none;
+  }
+  .countdown b { display: block; font: 700 clamp(96px, 22vw, 220px)/0.9 var(--display); color: var(--accent); font-variant-numeric: tabular-nums; }
+  .countdown p { margin: 8px 0 16px; color: var(--muted); font-size: 18px; }
+  .meter { width: min(320px, 70vw); height: 6px; border-radius: 3px; background: var(--line); margin: 0 auto; overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--accent); }
+
+  .start { pointer-events: auto; max-width: 34rem; }
+  .start h1 { font: 700 clamp(48px, 9vw, 84px)/0.95 var(--display); margin: 0 0 12px; letter-spacing: .01em; text-wrap: balance; }
+  .start h1 em { font-style: normal; color: var(--accent); }
+  .start p { color: var(--muted); margin: 0 auto 28px; max-width: 30rem; font-size: 17px; text-wrap: pretty; }
+  .go {
+    height: 64px; padding: 0 36px; border: 0; border-radius: 32px; background: var(--accent); color: var(--accent-ink);
+    font: 700 26px/1 var(--display); letter-spacing: .04em; text-transform: uppercase;
+  }
+  .error { margin-top: 20px; color: #ffb4a8; font-size: 15px; max-width: 30rem; margin-inline: auto; }
+
+  /* ---------- settings sheet ---------- */
+  .sheet {
+    position: fixed; right: var(--gutter); top: calc(env(safe-area-inset-top, 0px) + 84px);
+    width: min(360px, calc(100vw - 32px)); padding: 18px; border-radius: 16px;
+    background: var(--panel-solid); border: 1px solid var(--line); box-shadow: 0 20px 50px rgba(0,0,0,.5);
+    display: grid; gap: 16px;
+  }
+  .sheet h2 { margin: 0; font: 700 22px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; }
+  .field { display: grid; gap: 6px; }
+  .field label, .field .lbl { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .field select {
+    height: 46px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); padding: 0 12px; width: 100%;
+  }
+  .toggle { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 40px; }
+  .toggle input { width: 24px; height: 24px; accent-color: var(--accent); }
+  .mem { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); padding-top: 12px; }
+  .hint { font-size: 13px; color: var(--muted); margin: 0; }
+
+  @media (max-width: 700px) {
+    .readout b { font-size: 44px; }
+    .round { width: 48px; height: 48px; }
+    .tools { margin-left: 0; }
+    .tool span { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .bar, .bottom { transition: none; } }
+</style>
+</head>
+<body>
+
+<div id="stage"><canvas id="view"></canvas></div>
+
+<!-- Start screen -->
+<div class="center" id="startScreen">
+  <div class="start">
+    <h1>Watch your rep <em>after</em> you do it.</h1>
+    <p>Point the iPad at the drill. Each athlete finishes, walks over, and sees their own attempt play back on a delay while the next athlete goes.</p>
+    <button class="go" id="startBtn">Start camera</button>
+    <div class="error" id="errorMsg" hidden></div>
+  </div>
+</div>
+
+<!-- Buffering countdown -->
+<div class="center countdown" id="countdown" hidden>
+  <div>
+    <b id="countNum">10</b>
+    <p id="countText">Recording. Playback starts in a moment.</p>
+    <div class="meter"><i id="meterFill"></i></div>
+  </div>
+</div>
+
+<header class="bar" id="bar" hidden>
+  <div class="delay" role="group" aria-label="Delay">
+    <button class="round" id="minus" aria-label="Shorter delay">−</button>
+    <div class="readout"><b id="delayNum">10</b><span>sec delay</span></div>
+    <button class="round" id="plus" aria-label="Longer delay">+</button>
+  </div>
+  <div class="presets" id="presets"></div>
+  <div class="tools">
+    <button class="tool" id="pauseBtn" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="currentColor" id="pauseIcon"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+      <span id="pauseLabel">Freeze</span>
+    </button>
+    <button class="tool" id="fsBtn" aria-label="Full screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+    <button class="tool" id="setBtn" aria-label="Settings" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      <span>Settings</span>
+    </button>
+  </div>
+</header>
+
+<div class="bottom" id="bottom" hidden>
+  <div class="status" id="status"><i class="dot"></i><span id="statusText">Replay · 10s ago</span></div>
+  <div class="preview" id="previewBox">
+    <video id="live" playsinline muted autoplay></video>
+    <span class="tag"><i></i>LIVE</span>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <h2>Settings</h2>
+  <div class="field">
+    <label for="camSel">Camera</label>
+    <select id="camSel"></select>
+  </div>
+  <div class="field">
+    <label for="qualSel">Video quality</label>
+    <select id="qualSel">
+      <option value="long">Long delays (540p, 24 fps)</option>
+      <option value="std">Standard (720p, 30 fps)</option>
+      <option value="sharp">Sharp (1080p, 30 fps)</option>
+    </select>
+  </div>
+  <div class="toggle"><label for="mirrorChk">Mirror image</label><input type="checkbox" id="mirrorChk"></div>
+  <div class="toggle"><label for="previewChk">Show live preview</label><input type="checkbox" id="previewChk"></div>
+  <p class="hint">Tap the video to hide or show the controls. Changing camera or quality restarts the delay.</p>
+  <div class="mem" id="memText">Buffer: 0 MB</div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const video = $('#live'), view = $('#view'), vctx = view.getContext('2d');
+  const grab = document.createElement('canvas'), gctx = grab.getContext('2d');
+
+  const QUALITY = {
+    long:  { h: 540,  fps: 24, q: 0.70 },
+    std:   { h: 720,  fps: 30, q: 0.72 },
+    sharp: { h: 1080, fps: 30, q: 0.75 },
+  };
+  const PRESETS = [5, 10, 15, 20, 30, 45, 60];
+  const MIN_DELAY = 1, MAX_DELAY = 120;
+  const MEM_CAP = 450e6; // bytes of JPEG frames kept in memory
+
+  const prefs = Object.assign(
+    { delay: 10, quality: 'std', mirror: false, preview: true, deviceId: '' },
+    (() => { try { return JSON.parse(localStorage.getItem('delaycam') || '{}'); } catch { return {}; } })()
+  );
+  const save = () => { try { localStorage.setItem('delaycam', JSON.stringify(prefs)); } catch {} };
+
+  let stream = null, running = false;
+  let frames = [], bytes = 0, pending = 0, lastGrab = 0, memLimited = false;
+  let shown = null, bitmap = null, want = null, decoding = false;
+  let paused = false, pausedAt = 0, wakeLock = null;
+
+  /* ---------------- capture: JPEG frames into a time-stamped buffer ---------------- */
+  function scheduleGrab() {
+    if (!running) return;
+    if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(tick);
+    else requestAnimationFrame(tick);
+  }
+  function tick() { grabFrame(); scheduleGrab(); }
+
+  function grabFrame() {
+    const q = QUALITY[prefs.quality];
+    const now = performance.now();
+    if (now - lastGrab < 1000 / q.fps - 4 || pending > 2 || !video.videoWidth) return;
+    lastGrab = now;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const scale = Math.min(1, q.h / Math.min(vw, vh));
+    const w = Math.round(vw * scale), h = Math.round(vh * scale);
+    if (grab.width !== w || grab.height !== h) { grab.width = w; grab.height = h; }
+    gctx.drawImage(video, 0, 0, w, h);
+    pending++;
+    grab.toBlob((b) => {
+      pending--;
+      if (!b || !running) return;
+      frames.push({ t: now, b });
+      if (frames.length > 1 && frames[frames.length - 2].t > now) frames.sort((a, c) => a.t - c.t);
+      bytes += b.size;
+      while (bytes > MEM_CAP && frames.length > 1) { bytes -= frames.shift().b.size; memLimited = true; }
+    }, 'image/jpeg', q.q);
+  }
+
+  /* ---------------- playback: show the frame from `delay` seconds ago ---------------- */
+  function render() {
+    requestAnimationFrame(render);
+    if (!running) return;
+    const now = performance.now();
+    const target = (paused ? pausedAt : now) - prefs.delay * 1000;
+
+    let i = -1;
+    for (let k = 0; k < frames.length && frames[k].t <= target; k++) i = k;
+    if (i > 0 && !paused) {
+      for (let k = 0; k < i; k++) bytes -= frames[k].b.size;
+      frames.splice(0, i); i = 0;
+    }
+    if (i >= 0 && frames[i] !== shown) showFrame(frames[i]);
+    updateStatus(now, target, i >= 0);
+  }
+
+  async function showFrame(f) {
+    want = f;
+    if (decoding) return;
+    decoding = true;
+    while (want && want !== shown) {
+      const cur = want;
+      try {
+        const bmp = await createImageBitmap(cur.b);
+        if (bitmap && bitmap.close) bitmap.close();
+        bitmap = bmp;
+      } catch {}
+      shown = cur;
+      draw();
+    }
+    decoding = false;
+  }
+
+  function draw() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cw = Math.round(view.clientWidth * dpr), ch = Math.round(view.clientHeight * dpr);
+    if (view.width !== cw || view.height !== ch) { view.width = cw; view.height = ch; }
+    vctx.fillStyle = '#000';
+    vctx.fillRect(0, 0, cw, ch);
+    if (!bitmap) return;
+    const s = Math.min(cw / bitmap.width, ch / bitmap.height);
+    const w = bitmap.width * s, h = bitmap.height * s;
+    vctx.save();
+    if (prefs.mirror) { vctx.translate(cw, 0); vctx.scale(-1, 1); }
+    vctx.drawImage(bitmap, (cw - w) / 2, (ch - h) / 2, w, h);
+    vctx.restore();
+  }
+
+  /* ---------------- status + overlays ---------------- */
+  let lastStatus = '';
+  function updateStatus(now, target, haveFrame) {
+    const waiting = frames.length ? Math.max(0, (frames[0].t - target) / 1000) : prefs.delay;
+    const filling = !haveFrame;
+
+    $('#countdown').hidden = !(filling && !shown);
+    if (filling && !shown) {
+      $('#countNum').textContent = Math.ceil(waiting);
+      $('#countText').textContent = frames.length ? 'Recording. Replay starts in…' : 'Waiting for the camera…';
+      $('#meterFill').style.width = `${Math.min(100, (1 - waiting / prefs.delay) * 100)}%`;
+    }
+
+    let text, cls = '';
+    if (paused) { text = 'Frozen'; cls = 'paused'; }
+    else if (filling && shown) text = `Adding delay · ${Math.ceil(waiting)}s`;
+    else if (filling) text = 'Recording';
+    else text = `Replay · ${prefs.delay}s ago`;
+    if (memLimited && !paused) text += ' <small>(memory full: try lower quality)</small>';
+    const key = text + cls;
+    if (key !== lastStatus) {
+      lastStatus = key;
+      $('#statusText').innerHTML = text;
+      $('#status').className = 'status ' + cls;
+    }
+    if (!$('#sheet').hidden) {
+      $('#memText').textContent = `Buffer: ${(bytes / 1e6).toFixed(0)} MB · ${frames.length} frames`;
+    }
+  }
+
+  /* ---------------- delay controls ---------------- */
+  function setDelay(v) {
+    prefs.delay = Math.max(MIN_DELAY, Math.min(MAX_DELAY, Math.round(v)));
+    memLimited = false;
+    save();
+    $('#delayNum').textContent = prefs.delay;
+    document.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', String(+c.dataset.v === prefs.delay)));
+  }
+  PRESETS.forEach((v) => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.dataset.v = v; b.textContent = v + 's';
+    b.addEventListener('click', () => setDelay(v));
+    $('#presets').appendChild(b);
+  });
+  const step = () => (prefs.delay < 10 ? 1 : 5);
+  $('#minus').addEventListener('click', () => setDelay(prefs.delay <= 10 ? prefs.delay - 1 : prefs.delay - 5));
+  $('#plus').addEventListener('click', () => setDelay(prefs.delay + step()));
+
+  function togglePause() {
+    paused = !paused;
+    pausedAt = performance.now();
+    $('#pauseBtn').classList.toggle('on', paused);
+    $('#pauseBtn').setAttribute('aria-pressed', String(paused));
+    $('#pauseLabel').textContent = paused ? 'Resume' : 'Freeze';
+    $('#pauseIcon').innerHTML = paused
+      ? '<path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/>'
+      : '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
+  }
+  $('#pauseBtn').addEventListener('click', togglePause);
+
+  document.addEventListener('keydown', (e) => {
+    if (!running || e.target.tagName === 'SELECT') return;
+    if (e.key === ' ') { e.preventDefault(); togglePause(); }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') setDelay(prefs.delay + step());
+    if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') setDelay(prefs.delay <= 10 ? prefs.delay - 1 : prefs.delay - 5);
+  });
+
+  $('#stage').addEventListener('click', () => {
+    if (!$('#sheet').hidden) return toggleSheet(false);
+    document.body.classList.toggle('chrome-off');
+  });
+
+  /* ---------------- settings ---------------- */
+  function toggleSheet(open) {
+    $('#sheet').hidden = !open;
+    $('#setBtn').setAttribute('aria-expanded', String(open));
+    $('#setBtn').classList.toggle('on', open);
+  }
+  $('#setBtn').addEventListener('click', () => toggleSheet($('#sheet').hidden));
+
+  $('#qualSel').value = prefs.quality;
+  $('#qualSel').addEventListener('change', (e) => { prefs.quality = e.target.value; save(); startCamera(); });
+  $('#camSel').addEventListener('change', (e) => { prefs.deviceId = e.target.value; save(); startCamera(); });
+  $('#mirrorChk').checked = prefs.mirror;
+  $('#mirrorChk').addEventListener('change', (e) => { prefs.mirror = e.target.checked; save(); applyLook(); draw(); });
+  $('#previewChk').checked = prefs.preview;
+  $('#previewChk').addEventListener('change', (e) => { prefs.preview = e.target.checked; save(); applyLook(); });
+  function applyLook() {
+    document.body.classList.toggle('mirror', prefs.mirror);
+    $('#previewBox').classList.toggle('tucked', !prefs.preview);
+  }
+
+  const fsEl = document.documentElement;
+  const fsReq = fsEl.requestFullscreen || fsEl.webkitRequestFullscreen;
+  if (!fsReq) $('#fsBtn').hidden = true;
+  $('#fsBtn').addEventListener('click', () => {
+    const inFs = document.fullscreenElement || document.webkitFullscreenElement;
+    try {
+      const p = inFs ? (document.exitFullscreen || document.webkitExitFullscreen).call(document) : fsReq.call(fsEl);
+      if (p && p.catch) p.catch(() => {});
+    } catch {}
+  });
+
+  async function listCameras() {
+    try {
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
+      const current = stream && stream.getVideoTracks()[0]?.getSettings().deviceId;
+      $('#camSel').innerHTML = '';
+      cams.forEach((c, n) => {
+        const o = document.createElement('option');
+        o.value = c.deviceId; o.textContent = c.label || `Camera ${n + 1}`;
+        if (c.deviceId === current) o.selected = true;
+        $('#camSel').appendChild(o);
+      });
+    } catch {}
+  }
+
+  /* ---------------- camera ---------------- */
+  function showError(msg) {
+    $('#startScreen').hidden = false;
+    $('#bar').hidden = $('#bottom').hidden = $('#countdown').hidden = true;
+    $('#errorMsg').hidden = false;
+    $('#errorMsg').textContent = msg;
+  }
+
+  function resetBuffer() {
+    frames = []; bytes = 0; pending = 0; shown = null; want = null; memLimited = false;
+    if (bitmap && bitmap.close) bitmap.close();
+    bitmap = null; draw();
+  }
+
+  async function startCamera() {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      return showError('The camera only works when this page is opened over https:// (or from localhost). Host the file on GitHub Pages or Netlify and open that link in Safari.');
+    }
+    running = false;
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    const q = QUALITY[prefs.quality];
+    const v = { width: { ideal: Math.round(q.h * 16 / 9) }, height: { ideal: q.h }, frameRate: { ideal: q.fps } };
+    if (prefs.deviceId) v.deviceId = { exact: prefs.deviceId };
+    else v.facingMode = { ideal: 'environment' };
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: v, audio: false });
+    } catch (e) {
+      if (prefs.deviceId) { prefs.deviceId = ''; save(); return startCamera(); }
+      return showError(e && e.name === 'NotAllowedError'
+        ? 'Camera access was blocked. On iPad: Settings › Apps › Safari › Camera › Allow, then reload this page.'
+        : `Could not start the camera (${e && e.name || 'unknown error'}).`);
+    }
+    video.srcObject = stream;
+    try { await video.play(); } catch {}
+    resetBuffer();
+    running = true;
+    $('#startScreen').hidden = true;
+    $('#bar').hidden = $('#bottom').hidden = false;
+    scheduleGrab();
+    listCameras();
+    requestWake();
+  }
+  $('#startBtn').addEventListener('click', startCamera);
+
+  /* keep the screen awake while coaching */
+  async function requestWake() {
+    try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch {}
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && running) {
+      requestWake();
+      // iOS can pause the camera when backgrounded; restart if the track ended
+      if (!stream || stream.getVideoTracks().every((t) => t.readyState === 'ended')) startCamera();
+    }
+  });
+
+  window.addEventListener('resize', draw);
+  applyLook();
+  setDelay(prefs.delay);
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
